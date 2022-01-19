@@ -1,0 +1,108 @@
+---
+- name: get atmo vm ip address
+  set_fact:
+    vm_ip: "{{ ansible_host }}"
+
+- debug:
+    msg: "Atmo VM IP is {{ vm_ip }}"
+
+- name: verify that host is reachable via ssh port
+  local_action: wait_for
+      search_regex=OpenSSH
+      port={{ ansible_port }}
+      host="{{ vm_ip }}"
+      delay=1
+      timeout={{ SSH_TIMEOUT }}
+  tags: verify-ssh
+
+- name: WAIT_FOR_CONNECTION; poll every 10s for a max of 10m
+  wait_for_connection:
+    sleep: 10
+    timeout: 600
+
+- name: test default ansible connection
+  local_action: >
+      command ssh {{ SSH_OPTIONS }} -p {{ ansible_port }} root@{{ vm_ip }} 'echo batwin | grep batwin'
+  register: default_remote_user
+  ignore_errors: yes
+  failed_when: '"batwin" not in default_remote_user.stdout'
+  async: "{{ SSH_TIMEOUT }}"
+  poll: 1
+
+- name: SET_FACT; ansible_user to root
+  set_fact: ansible_user = "root"
+  when: '"batwin" in default_remote_user.stdout'
+
+###
+# CENTOS SETUP
+###
+- name: test centos connection
+  local_action: >
+      command ssh {{ SSH_OPTIONS}} -p {{ ansible_port }} centos@{{ vm_ip }} 'echo batwin' | grep 'batwin'
+  register: centos_remote_user
+  ignore_errors: yes
+  when: default_remote_user is failed
+  failed_when: '"batwin" not in centos_remote_user.stdout'
+  async: "{{ SSH_TIMEOUT }}"
+  poll: 1
+
+- name: SET_FACT; ansible_user to centos
+  set_fact: ansible_user = "centos"
+  when: '"batwin" in centos_remote_user.stdout'
+
+###
+# ROCKY SETUP
+###
+- name: test rocky connection
+  local_action: >
+      command ssh {{ SSH_OPTIONS}} -p {{ ansible_port }} rocky@{{ vm_ip }} 'echo batwin' | grep 'batwin'
+  register: rocky_remote_user
+  ignore_errors: yes
+  when: default_remote_user is failed and centos_remote_user is failed
+  failed_when: '"batwin" not in rocky_remote_user.stdout'
+  async: "{{ SSH_TIMEOUT }}"
+  poll: 1
+
+- name: SET_FACT; ansible_user to rocky
+  set_fact: ansible_user = "rocky"
+  when: '"batwin" in rocky_remote_user.stdout'
+
+###
+# UBUNTU SETUP
+###
+- name: test ubuntu connection
+  local_action: >
+    command ssh {{ SSH_OPTIONS }} -p {{ ansible_port }} ubuntu@{{ vm_ip }} 'echo batwin' | grep 'batwin'
+  register: ubuntu_remote_user
+  ignore_errors: yes
+  when: default_remote_user is failed and centos_remote_user is failed and rocky_remote_user is failed
+  failed_when: '"batwin" not in ubuntu_remote_user.stdout'
+  async: "{{ SSH_TIMEOUT }}"
+  poll: 1
+
+- name: SET_FACT; ansible_user to ubuntu
+  set_fact: ansible_user = "ubuntu"
+  when: '"batwin" in ubuntu_remote_user.stdout'
+
+# - debug: msg="root output is {{ default_remote_user.stdout }} and err is {{ default_remote_user.stderr }}"
+#
+# - debug: msg="centos output is {{ centos_remote_user.stdout }} and err is {{ centos_remote_user.stderr }}"
+#   when: default_remote_user|failed
+#
+# - debug: msg="ubuntu output is {{ ubuntu_remote_user.stdout }} and err is {{ ubuntu_remote_user.stderr }}"
+#   when: default_remote_user|failed and centos_remote_user|failed
+
+- name: fail when ssh errors occur related to Host key verification failed.
+  fail:
+    msg: "Configuration Error: Host key verification failed for IP: {{vm_ip}} . Does your ssh/config have 'StrictHostKeyChecking no' for the IP/IP Range/*"
+  when: (default_remote_user.stderr is defined and "Host key verification failed." in  default_remote_user.stderr) and
+        (centos_remote_user.stderr is defined and  "Host key verification failed." in centos_remote_user.stderr) and
+        (rocky_remote_user.stderr is defined and  "Host key verification failed." in rocky_remote_user.stderr) and
+        (ubuntu_remote_user.stderr is defined and  "Host key verification failed." in ubuntu_remote_user.stderr)
+
+- name: fail when ssh not possible
+  fail: msg="The host is not reachable via SSH as root and cloud users."
+  when: (default_remote_user.stdout is defined and "batwin" not in default_remote_user.stdout) and
+        (centos_remote_user.stdout is defined and "batwin" not in centos_remote_user.stdout) and
+        (rocky_remote_user.stdout is defined and "batwin" not in rocky_remote_user.stdout) and
+        (ubuntu_remote_user.stdout is defined and "batwin" not in ubuntu_remote_user.stdout)
