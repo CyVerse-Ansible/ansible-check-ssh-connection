@@ -48,7 +48,7 @@
 
 - name: SET_FACT; ansible_user to centos
   set_fact: ansible_user = "centos"
-  when: '"batwin" in centos_remote_user.stdout'
+  when: centos_remote_user.stdout is defined and '"batwin" in centos_remote_user.stdout'
 
 ###
 # ROCKY SETUP
@@ -65,7 +65,7 @@
 
 - name: SET_FACT; ansible_user to rocky
   set_fact: ansible_user = "rocky"
-  when: '"batwin" in rocky_remote_user.stdout'
+  when: rocky_remote_user.stdout is defined and '"batwin" in rocky_remote_user.stdout'
 
 ###
 # UBUNTU SETUP
@@ -82,7 +82,7 @@
 
 - name: SET_FACT; ansible_user to ubuntu
   set_fact: ansible_user = "ubuntu"
-  when: '"batwin" in ubuntu_remote_user.stdout'
+  when: ubuntu_remote_user.stdout is defined and '"batwin" in ubuntu_remote_user.stdout'
 
 # - debug: msg="root output is {{ default_remote_user.stdout }} and err is {{ default_remote_user.stderr }}"
 #

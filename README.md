@@ -25,9 +25,8 @@ Example Playbook
 This is a sample playbook:
 ````
 - hosts: host
-  become: true
   roles:
-    - ansible-k8s-apply
+    - ansible_check_ssh_connection
   vars:
     SSH_TIMEOUT: 60
 ````
